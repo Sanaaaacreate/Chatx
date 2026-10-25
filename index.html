@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp Clone - Secure Chat</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white h-screen flex flex-col">
+
+    <!-- Header -->
+    <div class="bg-gray-800 p-4 flex justify-between items-center shadow-md">
+        <h1 class="text-xl font-bold text-green-400">Secret Chat App</h1>
+        <span id="user-info" class="text-sm text-gray-400">User: <b id="current-user"></b></span>
+    </div>
+
+    <!-- Chat Box -->
+    <div id="chat-container" class="flex-1 overflow-y-auto p-4 space-y-3 flex flex-col">
+        <!-- Messages will load here -->
+    </div>
+
+    <!-- Input Form -->
+    <div class="bg-gray-800 p-3 flex items-center gap-2">
+        <input type="file" id="media-input" accept="video/*,image/*" class="hidden" onchange="handleMediaUpload(event)">
+        <button onclick="document.getElementById('media-input').click()" class="bg-gray-700 p-2 rounded-full hover:bg-gray-600">📎</button>
+        
+        <input type="text" id="message-input" placeholder="Type a message..." class="flex-1 bg-gray-700 p-3 rounded-lg focus:outline-none text-white">
+        
+        <button onclick="sendMessage()" class="bg-green-600 px-5 py-3 rounded-lg font-bold hover:bg-green-500">Send</button>
+    </div>
+
+    <script>
+        const username = prompt("अपना नाम दर्ज करें:") || "User_" + Math.floor(Math.random() * 1000);
+        document.getElementById('current-user').innerText = username;
+
+        async function fetchMessages() {
+            const res = await fetch('/api/messages');
+            const messages = await res.json();
+            const container = document.getElementById('chat-container');
+            container.innerHTML = '';
+
+            messages.forEach(msg => {
+                if (msg.deletedFor && msg.deletedFor.includes(username)) return; // अगर यूजर ने डिलीट किया है तो न दिखाएं
+
+                const div = document.createElement('div');
+                div.className = `p-3 rounded-lg max-w-xs md:max-w-md ${msg.sender === username ? 'bg-green-800 self-end' : 'bg-gray-700 self-start'}`;
+                
+                let content = `<p class="text-xs text-gray-300 font-bold mb-1">${msg.sender}</p>`;
+                if (msg.message) content += `<p>${msg.message}</p>`;
+                
+                if (msg.mediaType === 'video') {
+                    content += `<video src="${msg.mediaUrl}" controls class="mt-2 rounded max-h-48 w-full"></video>`;
+                } else if (msg.mediaType === 'image') {
+                    content += `<img src="${msg.mediaUrl}" class="mt-2 rounded max-h-48 w-full object-cover">`;
+                }
+
+                content += `<button onclick="deleteMessage('${msg._id}')" class="text-xs text-red-400 mt-2 block hover:underline">Delete Chat</button>`;
+                
+                div.innerHTML = content;
+                container.appendChild(div);
+            });
+            container.scrollTop = container.scrollHeight;
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('message-input');
+            if (!input.value.trim()) return;
+
+            await fetch('/api/messages', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sender: username, message: input.value })
+            });
+
+            input.value = '';
+            fetchMessages();
+        }
+
+        async function handleMediaUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                const mediaType = file.type.startsWith('video') ? 'video' : 'image';
+                await fetch('/api/messages', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sender: username, message: '', mediaUrl: e.target.result, mediaType })
+                });
+                fetchMessages();
+            };
+            reader.readAsDataURL(file);
+        }
+
+        async function deleteMessage(id) {
+            await fetch(`/api/messages/${id}/delete`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: username })
+            });
+            fetchMessages();
+        }
+
+        setInterval(fetchMessages, 3000); // ऑटो रिफ्रेश
+        fetchMessages();
+    </script>
+</body>
+</html>
